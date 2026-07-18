@@ -1,4 +1,4 @@
-# Tool2
+# ToolT2
 
 https://scratch.mit.edu/projects/1362976755/ で使う道具です。
 
