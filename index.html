@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画像ピクセルカラーコード抽出ツール（サイズ変更・色バグ修正版）</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 30px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h2 {
+            margin-top: 0;
+            color: #4a4a4a;
+        }
+        .input-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="file"] {
+            display: block;
+            margin-bottom: 15px;
+        }
+        select {
+            padding: 5px 10px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 15px;
+            font-weight: bold;
+            color: #4a4a4a;
+            white-space: pre-line;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>画像カラーコード抽出ツール（色バグ修正版）</h2>
+    <p>画像を選択し、縮小率を選んでから「変換」ボタンを押してください。</p>
+    
+    <div class="input-group">
+        <label for="imageInput">① 画像を選択 (PNG推奨):</label>
+        <input type="file" id="imageInput" accept="image/*">
+    </div>
+
+    <div class="input-group">
+        <label for="scaleSelect">② 画像の縮小率:</label>
+        <select id="scaleSelect">
+            <option value="1.0">100% (そのままのサイズ)</option>
+            <option value="0.75">75%</option>
+            <option value="0.5" selected>50% (半分のサイズ)</option>
+            <option value="0.25">25%</option>
+            <option value="0.1">10%</option>
+        </select>
+    </div>
+    
+    <button id="processBtn" disabled>テキストファイルに変換して保存</button>
+    <div id="status"></div>
+</div>
+
+<script>
+    const imageInput = document.getElementById('imageInput');
+    const scaleSelect = document.getElementById('scaleSelect');
+    const processBtn = document.getElementById('processBtn');
+    const statusDiv = document.getElementById('status');
+    let loadedImage = null;
+
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        statusDiv.textContent = "画像を読み込み中...";
+        processBtn.disabled = true;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                loadedImage = img;
+                updateStatus();
+                processBtn.disabled = false;
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    scaleSelect.addEventListener('change', function() {
+        if (loadedImage) {
+            updateStatus();
+        }
+    });
+
+    function updateStatus() {
+        const scale = parseFloat(scaleSelect.value);
+        const newWidth = Math.round(loadedImage.width * scale);
+        const newHeight = Math.round(loadedImage.height * scale);
+        
+        statusDiv.textContent = `元のサイズ: ${loadedImage.width} x ${loadedImage.height} px\n変換後のサイズ (${scale * 100}%): ${newWidth} x ${newHeight} px`;
+    }
+
+    processBtn.addEventListener('click', function() {
+        if (!loadedImage) return;
+
+        statusDiv.textContent = "解析中...";
+        processBtn.disabled = true;
+
+        const scale = parseFloat(scaleSelect.value);
+        const newWidth = Math.round(loadedImage.width * scale);
+        const newHeight = Math.round(loadedImage.height * scale);
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+
+        ctx.drawImage(loadedImage, 0, 0, newWidth, newHeight);
+
+        const imageData = ctx.getImageData(0, 0, newWidth, newHeight);
+        const data = imageData.data;
+
+        let colorCodes = [];
+
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i+1];
+            const b = data[i+2];
+            const a = data[i+3];
+
+            if (a === 0) {
+                colorCodes.push("none");
+            } else {
+                const hexR = r.toString(16).padStart(2, '0');
+                const hexG = g.toString(16).padStart(2, '0');
+                const hexB = b.toString(16).padStart(2, '0');
+                // ここを正しい RGB の順番に修正したよ！
+                colorCodes.push(`#${hexR}${hexG}${hexB}`);
+            }
+        }
+
+        const textOutput = colorCodes.join('\n');
+
+        const blob = new Blob([textOutput], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'pixel_colors.txt';
+        document.body.appendChild(a);
+        a.click();
+        
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        updateStatus();
+        statusDiv.textContent += "\n\n変換が完了し、ファイルをダウンロードしました！";
+        processBtn.disabled = false;
+    });
+</script>
+
+</body>
+</html>
